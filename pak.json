@@ -1,0 +1,25 @@
+{
+    "name": "YouTube",
+    "version": "v1.0.0",
+    "type": "TOOL",
+    "description": "YouTube.pak Lightweight YouTube browser for TrimUI devices",
+    "author": "tenlevels (modification by irvanvir12)",
+    "repo_url": "https://github.com/irvanvir12/TrimUI-Brick-Youtube",
+    "release_filename": "YouTube.pak.zip",
+    "changelog": {
+        "v1.0.0": "It supports video search, channel subscriptions, streaming via MPV, and downloading videos directly to your SD card"
+    },
+    "screenshots": [
+        ".github/resources/screenshots/main_menu.jpeg",
+        ".github/resources/screenshots/browse_channels.jpeg",
+        ".github/resources/screenshots/search_video.jpeg",
+        ".github/resources/screenshots/search_video 2.jpeg",
+        ".github/resources/screenshots/search_list.jpeg",
+        ".github/resources/screenshots/stream.jpeg",
+        ".github/resources/screenshots/download.jpeg"
+    ],
+    "platforms": [
+        "tg5040",
+        "tg5050"
+    ]
+}
