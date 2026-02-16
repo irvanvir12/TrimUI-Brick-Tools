@@ -24,7 +24,6 @@ check_connectivity() {
 
 ###############################################################################
 open_tools_menu() {
-
     while true; do
         > /tmp/tools_menu.txt
         echo "Add New Channel|add" >> /tmp/tools_menu.txt
@@ -39,13 +38,8 @@ open_tools_menu() {
         action=$(echo "$choice" | cut -d'|' -f2)
 
         case "$action" in
-            add)
-                add_channel
-                [ $? -eq 0 ] && return
-            ;;
-            remove)
-                remove_channel
-            ;;
+            add) add_channel ;;
+            remove) remove_channel ;;
             update)
                 ./update_yt_dlp.sh
                 ./show_message "yt-dlp Updated" -l a
@@ -56,14 +50,12 @@ open_tools_menu() {
 
 ###############################################################################
 add_channel() {
-
     while true; do
-
         ./show_message "Add Channel|Enter channel name" -t 2
         channel=$(./keyboard minui.ttf)
         kb_status=$?
 
-        [ $kb_status -ne 0 ] && return 1
+        [ $kb_status -ne 0 ] && return
         [ -z "$channel" ] && continue
 
         channel=$(normalize_channel "$channel")
@@ -74,12 +66,10 @@ add_channel() {
         }
 
         display=$(echo "$channel" | sed 's/@//' | sed 's/\([a-z]\)\([A-Z]\)/\1 \2/g')
-
         echo "$channel" >> "$CHANNELS_FILE"
 
         ./show_message "Channel Added|$display" -l a
-
-        return 0
+        return
     done
 }
 
@@ -92,39 +82,20 @@ remove_channel() {
     }
 
     cp "$CHANNELS_FILE" /tmp/remove_list.txt
-
     choice=$(./picker /tmp/remove_list.txt -b "BACK" -a "REMOVE")
-    status=$?
+    [ $? -ne 0 ] && return
 
-    [ $status -ne 0 ] && return
-
-    remove=$(echo "$choice")
-
-    grep -iv "^$remove$" "$CHANNELS_FILE" > /tmp/ch_tmp.txt
+    grep -iv "^$choice$" "$CHANNELS_FILE" > /tmp/ch_tmp.txt
     mv /tmp/ch_tmp.txt "$CHANNELS_FILE"
 
     ./show_message "Channel Removed" -l a
 }
 
 ###############################################################################
-download_simple() {
-    URL="$1"
-    TITLE="$2"
-    DOWNLOAD_DIR="/mnt/SDCARD/Roms/Media Player (MPV)"
-
-    mkdir -p "$DOWNLOAD_DIR"
-
-    ./show_message "Downloading|$TITLE" -t 1
-
-    "$YTDLP_PATH" "$URL" \
-        -f "bestvideo[vcodec^=avc1][height<=1080]+bestaudio[acodec^=mp4a]/best[vcodec^=avc1][height<=1080]/best[height<=1080]" \
-        --merge-output-format mp4 \
-        -o "$DOWNLOAD_DIR/%(title)s.%(ext)s" \
-        --no-warnings --no-progress
-
-    ./show_message "Download Finished|$TITLE" -l a
-}
-
+# STREAM (Progressive 720p, pasti ada audio)
+###############################################################################
+###############################################################################
+# STREAM (Smart Stream System)
 ###############################################################################
 stream_video() {
 
@@ -132,16 +103,108 @@ stream_video() {
 
     ./show_message "Preparing Stream..." -t 1
 
+    # -------------------------------------------------
+    # 1️⃣ Try Progressive 720p (pasti ada audio)
+    # -------------------------------------------------
     STREAM_URL=$("$YTDLP_PATH" -g \
-        -f "best[vcodec^=avc1][height<=1080]/best[height<=720]" \
+        -f "best[height<=720]/best" \
         "$URL" 2>/dev/null | head -n 1)
 
-    [ -z "$STREAM_URL" ] && {
-        ./show_message "Stream Not Available" -l a
+    if [ -n "$STREAM_URL" ]; then
+        /mnt/SDCARD/Emus/$PLATFORM/MPV.pak/launch.sh "$STREAM_URL"
         return
-    }
+    fi
 
-    /mnt/SDCARD/Emus/$PLATFORM/MPV.pak/launch.sh "$STREAM_URL"
+    # -------------------------------------------------
+    # 2️⃣ Try any progressive format
+    # -------------------------------------------------
+    STREAM_URL=$("$YTDLP_PATH" -g \
+        -f "best" \
+        "$URL" 2>/dev/null | head -n 1)
+
+    if [ -n "$STREAM_URL" ]; then
+        /mnt/SDCARD/Emus/$PLATFORM/MPV.pak/launch.sh "$STREAM_URL"
+        return
+    fi
+
+    # -------------------------------------------------
+    # 3️⃣ Fallback DASH (video + audio split)
+    # -------------------------------------------------
+    URLS=$("$YTDLP_PATH" -g \
+        -f "bestvideo[height<=720]+bestaudio/bestvideo+bestaudio" \
+        "$URL" 2>/dev/null)
+
+    VIDEO_URL=$(echo "$URLS" | sed -n '1p')
+    AUDIO_URL=$(echo "$URLS" | sed -n '2p')
+
+    if [ -n "$VIDEO_URL" ] && [ -n "$AUDIO_URL" ]; then
+        /mnt/SDCARD/Emus/$PLATFORM/MPV.pak/launch.sh "$VIDEO_URL" --audio-file="$AUDIO_URL"
+        return
+    fi
+
+    # -------------------------------------------------
+    # ❌ Final Fail
+    # -------------------------------------------------
+    ./show_message "Stream Not Available" -l a
+}
+
+
+###############################################################################
+# DOWNLOAD WITH PROGRESS (Percent Only – Stable)
+###############################################################################
+download_with_progress() {
+
+    URL="$1"
+    TITLE="$2"
+    DOWNLOAD_DIR="/mnt/SDCARD/Roms/Media Player (MPV)"
+
+    mkdir -p "$DOWNLOAD_DIR"
+
+    OUTPUT_TEMPLATE="$DOWNLOAD_DIR/%(title)s.%(ext)s"
+    PROGRESS_FILE="/tmp/yt_progress.txt"
+    rm -f "$PROGRESS_FILE"
+
+    # 🔥 Format stabil + merge mp4
+    "$YTDLP_PATH" "$URL" \
+        -f "bestvideo[vcodec^=avc1][height<=1080]+bestaudio[acodec^=mp4a]/best[height<=1080]/best" \
+        --merge-output-format mp4 \
+        --newline \
+        -o "$OUTPUT_TEMPLATE" \
+        > "$PROGRESS_FILE" 2>&1 &
+
+    YT_PID=$!
+    LAST_PERCENT=-1
+
+    while kill -0 $YT_PID 2>/dev/null; do
+
+        # Ambil persen terbaru
+        PERCENT=$(grep -o '[0-9]\{1,3\}\.[0-9]\+%' "$PROGRESS_FILE" \
+            | tail -n 1 \
+            | tr -d '%' \
+            | cut -d'.' -f1)
+
+        if [ -z "$PERCENT" ]; then
+            sleep 0.5
+            continue
+        fi
+
+        # Update hanya jika berubah
+        if [ "$PERCENT" -ne "$LAST_PERCENT" ]; then
+            LAST_PERCENT="$PERCENT"
+            ./show_message "Downloading|$TITLE|$LAST_PERCENT%" -t 1
+        fi
+
+        sleep 0.5
+    done
+
+    wait $YT_PID
+    EXIT_CODE=$?
+
+    if [ $EXIT_CODE -eq 0 ]; then
+        ./show_message "Download Finished|$TITLE|100%" -l a
+    else
+        ./show_message "Download Failed" -l a
+    fi
 }
 
 ###############################################################################
@@ -192,6 +255,7 @@ search_video() {
     }
 
     while true; do
+
         picker_output=$(./picker /tmp/search_results.txt -a "SELECT" -x "STREAM" -b "BACK")
         picker_status=$?
 
@@ -209,31 +273,22 @@ search_video() {
         show_video_info_screen "$url"
         choice=$?
 
-        [ "$choice" -eq 0 ] && download_simple "$url" "$title"
+        [ "$choice" -eq 0 ] && download_with_progress "$url" "$title"
     done
 }
 
 ###############################################################################
-# 🔥 CHANNEL ICON VERSION
-###############################################################################
 create_channels_menu() {
 
     > /tmp/channels_menu.txt
-
     echo "🔎 Search Video|search|action" >> /tmp/channels_menu.txt
 
     [ ! -s "$CHANNELS_FILE" ] && return
 
     while read -r channel; do
-
         [ -z "$channel" ] && continue
-
-        # display name tanpa @ + auto spasi CamelCase
         display=$(echo "$channel" | sed 's/@//' | sed 's/\([a-z]\)\([A-Z]\)/\1 \2/g')
-
-        # 📺 ICON CHANNEL
         echo "📺 $display|$channel|channel" >> /tmp/channels_menu.txt
-
     done < "$CHANNELS_FILE"
 }
 
@@ -247,34 +302,13 @@ main() {
         picker_output=$(./picker /tmp/channels_menu.txt -y "TOOLS" -b "EXIT" -a "SELECT")
         status=$?
 
-        # 🎮 Y BUTTON = TOOLS
-        [ $status -eq 4 ] && {
-            open_tools_menu
-            continue
-        }
-
+        [ $status -eq 4 ] && { open_tools_menu; continue; }
         [ $status -eq 2 ] && exit 0
         [ $status -ne 0 ] && continue
 
-        value=$(echo "$picker_output" | cut -d'|' -f2)
         type=$(echo "$picker_output" | cut -d'|' -f3)
 
-        [ "$type" = "action" ] && {
-            search_video
-            continue
-        }
-
-        if [ "$type" = "channel" ]; then
-            > /tmp/channel_options.txt
-            echo "Get Last Five Videos|five|action" >> /tmp/channel_options.txt
-            echo "Download Latest Video|latest|action" >> /tmp/channel_options.txt
-
-            opt=$(./picker /tmp/channel_options.txt)
-            [ $? -ne 0 ] && continue
-
-            mode=$(echo "$opt" | cut -d'|' -f2)
-            ./select_channel.sh "$value" "$mode"
-        fi
+        [ "$type" = "action" ] && search_video
     done
 }
 
