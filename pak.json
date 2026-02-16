@@ -1,22 +1,13 @@
 {
     "name": "YouTube",
-<<<<<<< HEAD
     "version": "v1.1.0",
     "type": "TOOL",
     "description": "Lightweight YouTube browser for TrimUI devices with Smart Stream and enhanced channel system",
-=======
-    "version": "v1.0.0",
-    "type": "TOOL",
-    "description": "YouTube.pak Lightweight YouTube browser for TrimUI devices",
->>>>>>> 74c418a (Restore repo metadata files)
     "author": "tenlevels (modification by irvanvir12)",
     "repo_url": "https://github.com/irvanvir12/TrimUI-Brick-Youtube",
     "release_filename": "YouTube.pak.zip",
     "changelog": {
-<<<<<<< HEAD
         "v1.1.0": "Added Smart Stream System with multi-format fallback (progressive + DASH), improved download engine with stable progress display, enhanced channel system (Get Last Five now supports streaming and downloading), Download Latest with direct progress support, better format compatibility (AVC1 + MP4A), improved stream stability and error handling",
-=======
->>>>>>> 74c418a (Restore repo metadata files)
         "v1.0.0": "It supports video search, channel subscriptions, streaming via MPV, and downloading videos directly to your SD card"
     },
     "screenshots": [
@@ -32,8 +23,4 @@
         "tg5040",
         "tg5050"
     ]
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 74c418a (Restore repo metadata files)
