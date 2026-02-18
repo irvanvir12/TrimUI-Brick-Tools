@@ -1,3 +1,4 @@
 build/
 *.zip
 build.sh
+launch_dev.sh
